@@ -1,0 +1,180 @@
+import React from 'react';
+import {SafeAreaView,Alert, Image,View, Text, TouchableOpacity, AsyncStorage, FlatList} from 'react-native';
+import User from '../User';
+import styles from '../constants/styles';
+import firebase from 'react-native-firebase';
+// import { Permissions, Notifications } from 'react-native-unimodules';
+
+export default class HomeScreen extends React.Component {
+
+    static navigationOptions = ({navigation}) => {
+        return{
+            title: 'Chats',
+            headerStyle:{
+                backgroundColor:"#567672",
+                elevation: 0
+              },
+              headerTintColor: '#fff',
+              headerTitleStyle: {
+                fontWeight: 'bold',
+              },
+            headerRight: (
+                <TouchableOpacity onPress={() => navigation.navigate('Profile')}>
+                    <Image source={require('../images/student.png')} style={{height:32,width:32,marginRight:7}} />
+                </TouchableOpacity>
+            ),
+            headerLeft: (
+                <TouchableOpacity onPress={() => navigation.navigate('Items')}>
+                    <Text> Back </Text> 
+                </TouchableOpacity>
+            )
+        }
+    }
+
+    state = {
+        users: [],
+        chatList: [],
+        isLoading: true
+    }
+
+    componentWillMount() {
+        let dbRef = firebase.database().ref('grievances');
+        dbRef.on('child_added', (val) => {
+            let grievanceId = val.val();
+            // console.log(grievanceId);
+            // console.log(val+ " "+val.key);
+            // console.log(person);
+            // person.phone = val.key;
+
+            // let senderName = firebase.database().ref('grievances').child(grievanceId).on("value").then( (snap) => {
+            //     return snap.school;
+            // })
+
+            
+
+            //Don't show logged in user in list
+            // if(person.phone === User.phone){
+            //     User.name = person.name
+            // }
+                
+                this.setState((prevState) => {
+                    return {
+                        chatList: [...prevState.chatList, grievanceId],
+                        isLoading: false
+                    }
+                });
+                //  console.log(this.state.chatList);
+           
+        });
+
+        let dbRef1 = firebase.database().ref('users');
+        dbRef1.on('child_added', (val) => {
+            let person = val.val();
+            console.log(val+ " "+val.key);
+            // console.log("I am here "+ person);
+            //Don't show logged in user in list
+            if(person.phone === User.phone){
+                User.name = person.name
+            }
+            else{
+                this.setState((prevState) => {  
+                    return {
+                        users: [...prevState.users, person],
+                        isLoading: false
+                    }
+                });
+            }
+
+            // console.log(this.state.users[0]);
+        
+        });
+        // this.registerForPushNotificationsAsync();
+        
+
+    }
+
+    
+    renderElement = (item) => {
+        // console.log(this.state.users[0]);
+        
+        let obj=this.state.users[0];
+        let serviceNum = item.service;
+        // console.log(obj.serviceNum);
+        // setTimeout(()=>{console.log("I am here "+JSON.stringify(obj))},50);
+        // console.log(obj.serviceNum);
+        if(item.service=="1234567890"){
+            return(
+                <Text style={{fontSize:20}}> Dialogflow AI Chatbot
+                                 </Text>);
+        }
+        return(
+        <Text style={{fontSize:20}}> {"("+item._id +")  "+  item.serviceName }
+                         </Text>);
+        }
+    
+    
+    renderRow = ({item}) => {
+        // console.log(item);
+        return(
+            <TouchableOpacity 
+                onPress={() =>{
+                    if(item.service != "1234567890"){
+                        this.props.navigation.navigate('Chat', item);
+                    }else{
+                        this.props.navigation.navigate('Dialog', item);
+                    }
+                }}
+                style={{padding:10, borderBottomColor:'#ccc', borderBottomWidth:1}}>
+                    {
+                        this.renderElement(item)
+                        // console.log(this.renderElement(item)),
+                        
+                    }           
+                        
+            </TouchableOpacity>
+        );
+    }
+
+    // registerForPushNotificationsAsync = async (currentUser) => {
+    //     const { existingStatus } = await Permissions.getAsync(Permissions.NOTIFICATIONS);
+    //     let finalStatus = existingStatus;
+
+    //     // only ask if permissions have not already been determined, because
+    //     // iOS won't necessarily prompt the user a second time.
+    //     if (existingStatus !== 'granted') {
+    //         // Android remote notification permissions are granted during the app
+    //         // install, so this will only ask on iOS
+    //         const { status } = await Permissions.askAsync(Permissions.NOTIFICATIONS);
+    //         finalStatus = status;
+    //     }
+
+    //     // Stop here if the user did not grant permissions
+    //     if (finalStatus !== 'granted') {
+    //         return;
+    //     }
+
+    //     // Get the token that uniquely identifies this device
+    //     let token = await Notifications.getExpoPushTokenAsync();
+
+    //     // POST the token to our backend so we can use it to send pushes from there
+    //     var updates = {}
+    //     updates['/expoToken'] = token
+    //     await firebase.database().ref('/users/' + User.phone).update(updates)
+    //     //call the push notification 
+    // }
+    
+    render(){
+        return(
+            <SafeAreaView>
+            {this.state.isLoading ? <Text> Fetching chat....... </Text> :
+                <FlatList
+                    data={this.state.chatList}
+                    renderItem={this.renderRow}
+                    keyExtractor={(item) => item._id}
+                />
+            }
+            </SafeAreaView>
+        )
+    }
+}
+// keyExtractor={(item) => item.key}

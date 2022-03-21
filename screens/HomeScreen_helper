@@ -1,0 +1,187 @@
+import React from 'react';
+import {SafeAreaView,Alert, Image,View, Text, TouchableOpacity, AsyncStorage, FlatList} from 'react-native';
+import User from '../User';
+import styles from '../constants/styles';
+import firebase from 'react-native-firebase';
+// import { Permissions, Notifications } from 'react-native-unimodules';
+
+export default class HomeScreen extends React.Component {
+
+    static navigationOptions = ({navigation}) => {
+        return{
+            title: 'Chats',
+            headerRight: (
+                <TouchableOpacity onPress={() => navigation.navigate('Profile')}>
+                    <Image source={require('../images/student.png')} style={{height:32,width:32,marginRight:7}} />
+                </TouchableOpacity>
+            )
+        }
+    }
+
+    state = {
+        users: [],
+        isLoading: true
+    }
+
+    componentWillMount() {
+        let dbRef = firebase.database().ref('users');
+        dbRef.on('child_added', (val) => {
+            let person = val.val();
+            // console.log(val+ " "+val.key);
+            // console.log(person);
+            person.phone = val.key;
+
+            //Don't show logged in user in list
+            if(person.phone === User.phone){
+                User.name = person.name
+            }
+            else{
+                this.setState((prevState) => {
+                    return {
+                        users: [...prevState.users, person],
+                        isLoading: false
+                    }
+                });
+            }
+           
+        });
+
+        // this.registerForPushNotificationsAsync();
+        
+
+    }
+
+    fetchNumChildren= async(item) => {
+        const rootRef = firebase.database().ref();
+        let item1 = {"name": "Ron", "phone":"2222222222"};
+        let ref1 = rootRef.child("messages").child(User.phone).child(item.phone);
+        let ret1= await ref1.once("value").then((val) => {
+            let ac = val.numChildren();
+            // console.log(`ac value firebase derived value of ${User.phone} and ${item.phone} is: `+ val.numChildren());
+            return ac;
+        }, (error) =>{
+            console.error(error);
+        });
+        // console.log("ret1: "+ret1);
+        return ret1;
+        
+    }
+    
+    fetchRenderedCount= async(item) => {
+        const rootRef = firebase.database().ref();
+        let item1 = {"name": "Ron", "phone":"2222222222"};
+        var ref2 = rootRef.child("RenderedMessageCount").child(User.phone).child(item.phone);
+        let ret2 = await ref2.once("value").then((val) => {
+            let rc = val.val().count;
+            // console.log(`firebase derived value for rc of ${User.phone} and ${item.phone} is: `+ val.val().count);
+            return rc;
+        }, (error) =>{
+            console.error(error);
+        });
+        // console.log("ret2: "+ret2);
+        return ret2;
+    }
+
+    renderElement = async(item) => {
+        
+        console.log(item);
+        const rootRef = firebase.database().ref();
+        var ref1 = rootRef.child("messages").child(User.phone).child(item.phone);
+        var ref2 = rootRef.child("RenderedMessageCount").child(User.phone).child(item.phone);
+
+        let ac1 = await this.fetchNumChildren(item);
+            console.log("ac1: "+ac1);
+        
+        let rc1= await this.fetchRenderedCount(item);
+            console.log("rc1: "+rc1);
+
+        if(ac1===rc1){
+            // console.log("ac1: "+ac1+" rc1: "+rc1);
+            return(true);
+        }
+        else{
+            // console.log("ac1: "+ac1+" rc1: "+rc1);
+            return(false);
+        }
+    }
+
+    decider = async(item) =>{
+        // console.log("reached in renderRow");
+        let val;
+        setTimeout(val = await this.renderElement(item), 500);
+        
+        console.log("val is: "+ JSON.stringify(val));
+        if(val){
+            return(
+            <Text style={{fontSize:20}}> {item.name} </Text>
+            )
+        }else{
+            return(
+            <Text style={{fontSize:20}}> {item.name+" (NEW MESSAGE!)"}</Text>
+            )
+        } 
+        }
+    
+    renderRow = ({item}) => {
+        // console.log(item);
+        return(
+            <TouchableOpacity 
+                onPress={() =>{
+                    if(item.name !== 'dialog'){
+                        this.props.navigation.navigate('Chat', item);
+                    }else{
+                        this.props.navigation.navigate('Dialog', item);
+                    }
+                }}
+                style={{padding:10, borderBottomColor:'#ccc', borderBottomWidth:1}}>
+                    {
+                        // console.log("reached renderRow"),
+                        async() =>{await this.decider(item)}  
+                    }           
+                        
+            </TouchableOpacity>
+        );
+    }
+
+    // registerForPushNotificationsAsync = async (currentUser) => {
+    //     const { existingStatus } = await Permissions.getAsync(Permissions.NOTIFICATIONS);
+    //     let finalStatus = existingStatus;
+
+    //     // only ask if permissions have not already been determined, because
+    //     // iOS won't necessarily prompt the user a second time.
+    //     if (existingStatus !== 'granted') {
+    //         // Android remote notification permissions are granted during the app
+    //         // install, so this will only ask on iOS
+    //         const { status } = await Permissions.askAsync(Permissions.NOTIFICATIONS);
+    //         finalStatus = status;
+    //     }
+
+    //     // Stop here if the user did not grant permissions
+    //     if (finalStatus !== 'granted') {
+    //         return;
+    //     }
+
+    //     // Get the token that uniquely identifies this device
+    //     let token = await Notifications.getExpoPushTokenAsync();
+
+    //     // POST the token to our backend so we can use it to send pushes from there
+    //     var updates = {}
+    //     updates['/expoToken'] = token
+    //     await firebase.database().ref('/users/' + User.phone).update(updates)
+    //     //call the push notification 
+    // }
+    
+    render(){
+        return(
+            <SafeAreaView>
+            {this.state.isLoading ? <Text> Fetching chat....... </Text> :
+                <FlatList
+                    data={this.state.users}
+                    renderItem={this.renderRow}
+                    keyExtractor={(item) => item.phone}
+                />
+            }
+            </SafeAreaView>
+        )
+    }
+}

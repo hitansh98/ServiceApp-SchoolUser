@@ -1,0 +1,399 @@
+import React from 'react';
+import { Dimensions, View, Text,} from 'react-native';
+import firebase from 'react-native-firebase';
+import User from '../User';
+import { GiftedChat } from 'react-native-gifted-chat'
+import { Dialogflow_V2 } from 'react-native-dialogflow'
+
+import { dialogflowConfig } from '../env';
+
+// const BOT_USER = {
+//     _id: 2,
+//     name: 'FAQ Bot',
+//     avatar: 'https://i.imgur.com/7k12EPD.png'
+//   };
+
+export default class ChatScreen extends React.Component {
+    // static navigationOptions = ({navigation}) => {
+    //     title: navigation.getParam('name', null);
+    // }
+
+
+
+    constructor(){
+        super();
+        this.state = {
+            person: {
+                name: "Dialog",
+                phone: 1234567890,
+            },
+            textMessage: '',
+            messageList: [],
+            giftedMessages: [],
+            otherMemberExpo: null,
+        }
+    }
+    static navigationOptions = ({navigation}) => {
+        return{
+            title: 'Dialog',
+            headerStyle:{
+                backgroundColor:"#567672",
+                elevation: 0,
+                height:90,
+              },
+              headerTintColor: '#fff',
+              headerTitleStyle: {
+                fontFamily: 'Montserrat-Bold'
+              },
+            
+        }
+        
+    }
+    // sortFunction(a,b){  
+    //     var dateA = a.time;
+    //     var dateB = b.time;
+    //     return dateA > dateB ? 1 : -1;  
+    // };
+    // `Hi! I am the FAQ bot 🤖 from Jscrambler.\n\nHow may I help you with today?`
+    generateChat(messageList){
+        const giftedMessages = [];
+         //console.log(messageList);
+         
+        
+        
+        messageList.sort((a,b)=>a.time-b.time);
+        // console.log(messageList);
+        
+        for(let i=0; i < messageList.length; i++){
+            if(messageList[i].from == "1234567890")
+            {
+                giftedMessages.push({
+                    _id: messageList[i].time,
+                    text: messageList[i].message,
+                    createdAt: new Date(messageList[i].time),
+                    user: {
+                        _id: messageList[i].from,
+                        name: "Dialog"
+                    },
+                })
+            }
+            else{
+                giftedMessages.push({
+                    _id: messageList[i].time,
+                    text: messageList[i].message,
+                    createdAt: new Date(messageList[i].time),
+                    user: {
+                        _id: messageList[i].from,
+                        name: User.name
+                    },
+                })
+            }
+            
+        }
+        // console.log(giftedMessages);
+        
+        this.setState({giftedMessages});
+    }
+
+    // generateChat(messageList){
+    //     const giftedMessages = [];
+    //     for(let i=0; i < messageList.length; i++){
+    //         giftedMessages.push({
+    //             _id: messageList[i].time,
+    //             text: messageList[i].dialogQuery,
+    //             createdAt: new Date(messageList[i].time),
+    //             user: {
+    //                 _id: messageList[i].from,
+    //                 name: ""
+    //             },
+    //         })
+    //     }
+    //     // console.log(messageList);
+    //     // this.setState({giftedMessages});
+       
+    // }
+
+    componentWillMount() {
+        let _this = this;
+
+        firebase.database().ref('messages').child(this.state.person.phone).child(User.phone)
+         .on('child_added', (value) => {
+             this.setState((prevState) => {
+                 return{
+                    messageList: [...prevState.messageList, value.val()]
+                 }
+             }, () => this.generateChat(this.state.messageList));
+         });
+         
+        //  firebase.database().ref('messages').child(this.state.person.phone).child(User.phone)
+        //  .on('child_added', (value) => {
+        //      this.setState((prevState) => {
+        //          return{
+        //              messageList: [...prevState.messageList, value.val()]
+        //          }
+        //      }, () => this.generateChat(this.state.messageList));
+        //  });
+
+        firebase.database().ref('dialogMessages').child(User.phone)
+         .on('child_added', (value) => {
+             this.setState((prevState) => {
+                 return{
+                    messageList: [...prevState.messageList, value.val()]
+                 }
+             }, () => this.generateChat(this.state.messageList));
+         });
+
+         let dBref = firebase.database().ref('/users/' + this.state.person.phone)
+         dBref.on("value", function(snapshot) {
+             const snap = snapshot.val();
+             if(!!snap.expoToken){
+                 _this.setState({
+                     otherMemberExpo: snap.expoToken
+                 });
+             }
+         }, function (errorObject) {
+             console.log("The read failed: " + errorObject.code);
+         });
+
+         console.log(this.state.messageList);
+
+    }
+
+    // componentWillMount() {
+    //     let _this = this;
+
+    //     firebase.database().ref('messages').child(this.state.person.phone).child(User.phone)
+    //     .on('child_added', (value) => {
+    //         this.setState((prevState) => {
+    //             return{
+    //                 dialogMessageList: [...prevState.dialogMessageList, value.val()]
+    //             }
+    //         }, () => this.generateDialogChat(this.state.dialogMessageList));
+    //     });
+    // }
+
+    componentDidMount() {
+        Dialogflow_V2.setConfiguration(
+          dialogflowConfig.client_email,
+          dialogflowConfig.private_key,
+          Dialogflow_V2.LANG_ENGLISH_US,
+          dialogflowConfig.project_id
+        );
+      }
+ 
+    componentWillUnmount() {
+         const x = firebase.database().ref('messages').child(User.phone).child(this.state.person.phone);
+         x.off();
+     };
+
+     sendNotification(message, token){
+        var messages = [];
+        messages.push({
+            'to': token,
+            'body': message,
+            'sound': 'default',
+            'subtitle': `Message from ${User.name}`
+        })
+        fetch('https://exp.host/--/api/v2/push/send', {
+            'method': 'POST',
+            'headers': {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(messages)
+        });
+        console.log("Notification sent")
+    }
+
+     handleChange = key => val => {
+        this.setState({ [key]: val });
+    }
+
+     convertTime = (time) => {
+        let d = new Date(time);
+        let c = new Date();
+        let result = (d.getHours() < 10 ? '0': '') + d.getHours() + ':';
+        result += (d.getMinutes() < 10 ? '0': '') + d.getMinutes();
+        if(c.getDay() !== d.getDay()){
+            result = d.getDay() + ' ' + d.getMonth() + ' ' + result;
+        }
+        return result;
+    }
+    handleGoogleResponse(result) {
+        // console.log(result.queryResult.fulfillmentMessages[0].text);
+        // let responseText= result.queryResult.fulfillmentMessages[0].text.text[0];
+        // console.log(responseText);
+        // console.log(result.responseId);
+    
+        const now = new Date().getTime();
+        let googleQuery={
+            _id: now,
+            createdAt: firebase.database.ServerValue.TIMESTAMP,
+            text: result.queryResult.fulfillmentMessages[0].text.text[0],
+            user: {
+                _id: 1234567890,
+                name: "Dialog",
+            }
+        };
+        console.log(googleQuery);
+        // console.log(googleQuery);
+        // console.log(result);
+        let textArr=[];
+        // let text = result.queryResult.fulfillmentMessages[0].text.text[0];
+        textArr.push(googleQuery);
+    //    console.log(textArr);
+    //    let resultArr=[];
+    //    resultArr= resultArr.push(result);
+        this.updateMessage(textArr);
+    }
+
+
+    // sendBotResponse= async(textArr) => {
+    //     {
+    //     let dialogResponse ={}
+    //     let updates = {};
+    
+    //     let msgId = firebase.database().ref('dialogMessage').child(User.phone).push().key;
+    //     dialogResponse = {
+    //         from: 1234567890,
+    //         message: textArr[0],
+    //         time: firebase.database.ServerValue.TIMESTAMP,
+    //     };
+    //     // console.log(dialogResponse.message);
+    //     updates[`dialogMessages/${User.phone}/${msgId}`] = dialogResponse;
+        
+    //     firebase.database().ref().update(updates);
+    //     //console.log(msg.time);
+
+    //     if(this.state.otherMemberExpo !== null){
+    //         this.sendNotification(textArr[0].text, this.state.otherMemberExpo);
+        
+    //      }
+    // }
+        
+    // }
+
+  
+
+    //  generateBotChat(messageList){
+    //         const giftedMessages = [];
+            
+    //         for(let i=0; i < messageList.length; i++){
+            
+    //             giftedMessages.push({
+    //                 _id: messageList[i].time,
+    //                 text: messageList[i].message,
+    //                 createdAt: new Date(messageList[i].time),
+    //                 user: {
+    //                     _id: 1234567890,
+    //                     name: "Dialog",
+    //                 }
+    //             })
+    //         }
+    //         console.log(messageList);
+    //         this.setState({giftedMessages});
+    //     }
+        
+    
+
+    updateMessage = async (messsages) => {
+        // console.log(messsages[0].user.name);
+        if(messsages.length > 0){
+            // console.log(messsages);
+            if(messsages[0].user.name === User.name)
+            {
+                console.log("Reached in user text");
+                let msgId = firebase.database().ref('message').child(User.phone).child(this.state.person.phone).push().key;
+                let updates = {};
+                //const now = new Date().getTime();
+                let dialogQuery = {
+                    message: messsages[0].text,
+                    time: firebase.database.ServerValue.TIMESTAMP,
+                    from: User.phone,
+                };
+                //console.log(dialogQuery);
+                let message= dialogQuery.message; 
+                Dialogflow_V2.requestQuery(
+                    message,
+                    result => this.handleGoogleResponse(result),
+                    error => console.log(error)
+                  );
+
+                
+                updates[`messages/${User.phone}/${this.state.person.phone}/${msgId}`] = dialogQuery;
+                updates[`messages/${this.state.person.phone}/${User.phone}/${msgId}`] = dialogQuery;
+                firebase.database().ref().update(updates);
+
+                if(this.state.otherMemberExpo !== null){
+                    this.sendNotification(messsages[0].text, this.state.otherMemberExpo);
+                }
+            }
+            }   
+            if(messsages[0].user.name === "Dialog"){
+                // console.log("Reached in Dialog text");
+                let dialogResponse ={}
+                let updates = {};
+            
+                let msgId = firebase.database().ref('dialogMessage').child(User.phone).push().key;
+                //const now = new Date().getTime();
+                dialogResponse = {
+                from: 1234567890,
+                message: messsages[0].text,
+                time: firebase.database.ServerValue.TIMESTAMP,
+                };
+                // console.log(dialogResponse.message);
+                updates[`dialogMessages/${User.phone}/${msgId}`] = dialogResponse;
+                
+                firebase.database().ref().update(updates);
+                //console.log(msg.time);
+
+                if(this.state.otherMemberExpo !== null){
+                    this.sendNotification(textArr[0].text, this.state.otherMemberExpo);
+                
+                 }
+            }
+            
+            
+        }
+
+    renderRow = ({item}) => {
+        return (
+            <View style={{
+                flexDirection: 'row',
+                width:'60%',
+                alignSelf: item.from === User.phone ? 'flex-end' : 'flex-start',
+                backgroundColor: item.from === User.phone ? '#00897b' : '#7cb342',
+                marginBottom: 10,
+                borderRadius: 5
+            }}>
+                <Text style={{color: '#fff', padding:7, fontSize:16}}>
+                    {item.message}
+                </Text>
+                <Text style={{color: '#eee', padding:3, fontSize:12}}>
+                    {this.convertTime(item.time)}
+                </Text>
+            </View>
+        )
+    }
+
+    render() {
+        let {height, width} = Dimensions.get('window');
+        return (
+        
+            <GiftedChat
+                scrollToBottom
+                inverted={false}
+                onSend={messages => this.updateMessage(messages)}
+                isAnimated
+                messages={this.state.giftedMessages}
+                user={{
+                _id: User.phone,
+                name: User.name
+            }}
+        />
+       
+        );
+    }
+}
+
+
